@@ -1,4 +1,6 @@
-#Snailbrain: The Slowest ML "Framework"
+Snailbrain: The Slowest ML "Framework"
+--------------------------------------
+
 This is a really weird project that I have started, where I am crazy enough to attempt making a somewhat functional framework for deep learning. Right now, it has basically nothing so far, but I hope this project can do a couple of things:
 
 - Be able to implement simple, dense neural networks
