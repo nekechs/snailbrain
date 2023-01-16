@@ -110,7 +110,7 @@ impl <T> Variable <T> {
 
 
 /* Intention here is to specify operations common to nodes */
-/* Examples: Checking to see if node requires_grad, serialization, etc. */
+/* Examples: Checking to see if node requires_grad, serialization, etc.` */
 pub trait Node {
 
 }
