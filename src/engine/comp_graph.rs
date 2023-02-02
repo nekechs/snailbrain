@@ -16,6 +16,7 @@ pub struct Variable<T> {
 
 pub struct ForwardGraph {
     // topo_nodes: Vec<Rc<dyn Node>>,
+    topo_nodes: Vec<>
 
     /* Essentially, for each index in topo_nodes, the corresp. vector stored in forward_edges contains
     a list of ALL nodes that the original nodes has a forward edge with. */
