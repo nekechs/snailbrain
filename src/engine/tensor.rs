@@ -38,6 +38,10 @@ impl TensorView {
 
         TensorView { sizes, strides, offset: 0 }
     }
+
+    pub fn gen_from_same(&self) -> Self {
+        Self::from_dimension(&self.sizes)
+    }
 }
 
 pub(crate) struct TensorStorage {

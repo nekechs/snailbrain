@@ -3,9 +3,9 @@
 /// Main idea: Dissociate the graph's structure from any computational structures.
 /// This is so we may have GPU support down the line, where we keep data in VRAM.
 
-use super::tensor::TensorView;
+use super::tensor::{TensorView, self};
 
-use ndarray::prelude::*;
+use ndarray::{prelude::*, FoldWhile};
 
 #[derive(Debug)]
 pub struct Graph{
@@ -21,7 +21,31 @@ pub struct Variable {
     op: Operation,
     forward_refs: Vec<usize>,
 
-    requires_grad: bool,
+    grad: Option<TensorView>,
+    backward_topo: Option<Vec<usize>>,
+}
+
+impl Variable {
+    #[inline]
+    pub fn requires_grad(&self) -> bool {
+        match self.grad {
+            Some(_) => true,
+            _ => false
+        }
+    }
+
+    fn new(tensor: TensorView, id: usize, op: Operation, requires_grad: bool) -> Self {
+        let grad = if requires_grad {Some(tensor.gen_from_same())} else {None};
+
+        Variable {
+            tensor: tensor,
+            id,
+            op,
+            forward_refs: vec![],
+            grad,
+            backward_topo: None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -44,17 +68,17 @@ impl Graph {
         }
     }
 
+    // pub fn backward() 
+
     pub fn zeros(&mut self, dim: &[usize], requires_grad: bool) -> Option<usize> {
         let var_id = self.next_id;
-
-        let var = Variable {
-            tensor: TensorView::from_dimension(dim),
-            id: var_id,
-            op: Operation::Leaf,
-            forward_refs: vec![],
-            requires_grad
-        };
-
+        let var = Variable::new(
+            TensorView::from_dimension(dim),
+            var_id,
+            Operation::Leaf,
+            requires_grad,
+        );
+        
         self.next_id += 1;
         self.nodes.push(var);
 
@@ -70,14 +94,12 @@ impl Graph {
             None
         } else {
             let var_id = self.next_id;
-
-            let var = Variable{
-                tensor: TensorView::from_dimension(&x.tensor.sizes),
-                id: self.next_id,
-                op: Operation::Addition(x_id, y_id),
-                forward_refs: vec![],
-                requires_grad: x.requires_grad || y.requires_grad
-            };
+            let var = Variable::new(
+                TensorView::from_dimension(&x.tensor.sizes),
+                self.next_id,
+                Operation::Addition(x_id, y_id),
+                x.requires_grad() || y.requires_grad()
+            );
 
             self.next_id += 1;
             
@@ -98,14 +120,12 @@ impl Graph {
             None
         } else {
             let var_id = self.next_id;
-
-            let var = Variable {
-                tensor: TensorView::from_dimension(&x.tensor.sizes),
-                id: self.next_id,
-                op: Operation::Subtraction(x_id, y_id),
-                forward_refs: vec![],
-                requires_grad: x.requires_grad || y.requires_grad,
-            };
+            let var = Variable::new(
+                TensorView::from_dimension(&x.tensor.sizes),
+                self.next_id,
+                Operation::Subtraction(x_id, y_id),
+                x.requires_grad() || y.requires_grad()
+            );
 
             self.next_id += 1;
 
@@ -126,14 +146,13 @@ impl Graph {
             None
         } else {
             let var_id = self.next_id;
-
-            let var = Variable {
-                tensor: TensorView::from_dimension(&[x.tensor.sizes[0], y.tensor.sizes[1]]),
-                id: var_id,
-                op: Operation::MatMatMul(x_id, y_id),
-                forward_refs: vec![],
-                requires_grad: x.requires_grad || y.requires_grad,
-            };
+            let new_dim = [x.tensor.sizes[0], y.tensor.sizes[1]];
+            let var = Variable::new(
+                TensorView::from_dimension(&new_dim),
+                var_id,
+                Operation::MatMatMul(x_id, y_id),
+                x.requires_grad() || y.requires_grad()
+            );
 
             self.next_id += 1;
 
@@ -154,14 +173,13 @@ impl Graph {
             None
         } else {
             let var_id = self.next_id;
-
-            let var = Variable {
-                tensor: TensorView::from_dimension(&[x.tensor.sizes[0]]),
-                id: var_id,
-                op: Operation::MatVecMul(x_id, y_id),
-                forward_refs: vec![],
-                requires_grad: x.requires_grad || y.requires_grad,
-            };
+            let new_dim = [x.tensor.sizes[0], y.tensor.sizes[1]];
+            let var = Variable::new(
+                TensorView::from_dimension(&new_dim),
+                var_id,
+                Operation::MatVecMul(x_id, y_id),
+                x.requires_grad() || y.requires_grad()
+            );
 
             self.next_id += 1;
 
@@ -176,15 +194,13 @@ impl Graph {
 
     pub fn tanh(&mut self, x_id: usize) -> Option<usize> {
         let x = &self.nodes[x_id];
-
         let var_id = self.next_id;
-        let var = Variable {
-            tensor: TensorView::from_dimension(&x.tensor.sizes),
-            id: var_id,
-            op: Operation::Tanh(x_id),
-            forward_refs: vec![],
-            requires_grad: x.requires_grad,
-        };
+        let var = Variable::new(
+            TensorView::from_dimension(&x.tensor.sizes),
+            var_id,
+            Operation::Tanh(x_id),
+            x.requires_grad()
+        );
 
         self.next_id += 1;
         self.nodes[x_id].forward_refs.push(var_id);
@@ -195,15 +211,13 @@ impl Graph {
 
     pub fn relu(&mut self, x_id: usize) -> Option<usize> {
         let x = &self.nodes[x_id];
-
         let var_id = self.next_id;
-        let var = Variable {
-            tensor: TensorView::from_dimension(&x.tensor.sizes),
-            id: var_id,
-            op: Operation::ReLU(x_id),
-            forward_refs: vec![],
-            requires_grad: x.requires_grad,
-        };
+        let var = Variable::new(
+            TensorView::from_dimension(&x.tensor.sizes),
+            var_id,
+            Operation::ReLU(x_id),
+            x.requires_grad()
+        );
 
         self.next_id += 1;
         self.nodes[x_id].forward_refs.push(var_id);
@@ -214,15 +228,13 @@ impl Graph {
 
     pub fn sigmoid(&mut self, x_id: usize) -> Option<usize> {
         let x = &self.nodes[x_id];
-
         let var_id = self.next_id;
-        let var = Variable {
-            tensor: TensorView::from_dimension(&x.tensor.sizes),
-            id: var_id,
-            op: Operation::Sigmoid(x_id),
-            forward_refs: vec![],
-            requires_grad: x.requires_grad,
-        };
+        let var = Variable::new(
+            TensorView::from_dimension(&x.tensor.sizes),
+            var_id,
+            Operation::Sigmoid(x_id),
+            x.requires_grad()
+        );
 
         self.next_id += 1;
         self.nodes[x_id].forward_refs.push(var_id);
