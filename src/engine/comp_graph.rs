@@ -3,265 +3,231 @@
 /// Main idea: Dissociate the graph's structure from any computational structures.
 /// This is so we may have GPU support down the line, where we keep data in VRAM.
 
+use super::tensor::TensorView;
+
 use ndarray::prelude::*;
 
-use std::rc::Rc;
-
-pub struct Variable<T> {
-    nodes: Rc<T>,
-    dimension: Vec<usize>,
-
-    forward_cache: Option<ForwardGraph>,
+#[derive(Debug)]
+pub struct Graph{
+    nodes: Vec<Variable>,
+    next_id: usize
 }
 
-pub struct ForwardGraph {
-    // topo_nodes: Vec<Rc<dyn Node>>,
-    topo_nodes: Vec<>
+#[derive(Debug)]
+pub struct Variable {
+    tensor: TensorView,
 
-    /* Essentially, for each index in topo_nodes, the corresp. vector stored in forward_edges contains
-    a list of ALL nodes that the original nodes has a forward edge with. */
-    forward_edges: Vec<Vec<usize>>,
+    id: usize,
+    op: Operation,
+    forward_refs: Vec<usize>,
+
+    requires_grad: bool,
 }
 
-pub fn zeros(dim: &[usize], requires_grad: bool) -> Variable<Leaf> {
-    let grad;
-    if requires_grad {
-        grad = Some(ArrayD::zeros(dim));
-    } else {
-        grad = None;
-    }
-
-    Variable {
-        nodes: Rc::from(Leaf {requires_grad: grad, buffer: ArrayD::zeros(dim)}),
-        dimension: Vec::from(dim),
-        forward_cache: None,
-    }
+#[derive(Debug)]
+pub enum Operation {
+    Leaf,
+    Sigmoid(usize),
+    Tanh(usize),
+    ReLU(usize),
+    Addition(usize, usize),
+    Subtraction(usize, usize),
+    MatMatMul(usize, usize),
+    MatVecMul(usize, usize),
 }
 
-impl <T> Variable <T> {
-    pub fn forward(&mut self) {
-
-    }
-
-    pub fn backward(&mut self) {
-        
-    }
-}
-
-/* Operations on variables */
-impl <T> Variable <T> {
-    pub fn add<R>(&self, rhs: &Variable<R>) -> Variable<Addition<T, R>> {
-        if self.dimension != rhs.dimension {
-            panic!("Error while adding two variables of different dimensions.");
+impl Graph {
+    pub fn new() -> Self {
+        Graph {
+            nodes: vec![],
+            next_id: 0
         }
+    }
 
-        let operation = Addition {
-            first_operand: self.nodes.clone(),
-            second_operand: rhs.nodes.clone(),
-            buffer: ArrayD::zeros(&self.dimension[..]),
-            grad: ArrayD::zeros(&self.dimension[..]),
+    pub fn zeros(&mut self, dim: &[usize], requires_grad: bool) -> Option<usize> {
+        let var_id = self.next_id;
+
+        let var = Variable {
+            tensor: TensorView::from_dimension(dim),
+            id: var_id,
+            op: Operation::Leaf,
+            forward_refs: vec![],
+            requires_grad
         };
-        Variable {
-            nodes: Rc::from(operation),
-            dimension: self.dimension.clone(),
-            forward_cache: None,
+
+        self.next_id += 1;
+        self.nodes.push(var);
+
+        Some(var_id)
+    }
+
+    pub fn add(&mut self, x_id: usize, y_id: usize) -> Option<usize> {
+        let x = &self.nodes[x_id];
+        let y = &self.nodes[y_id];
+
+        /* First, check to see if the add operation would even work. */
+        if !x.tensor.shares_dim(&y.tensor) {
+            None
+        } else {
+            let var_id = self.next_id;
+
+            let var = Variable{
+                tensor: TensorView::from_dimension(&x.tensor.sizes),
+                id: self.next_id,
+                op: Operation::Addition(x_id, y_id),
+                forward_refs: vec![],
+                requires_grad: x.requires_grad || y.requires_grad
+            };
+
+            self.next_id += 1;
+            
+            self.nodes[x_id].forward_refs.push(var.id);
+            self.nodes[y_id].forward_refs.push(var.id);
+
+            self.nodes.push(var);
+
+            Some(var_id)
         }
     }
 
-    pub fn subtract<R>(&self, rhs: &Variable<R>) -> Variable<Subtraction<T, R>> {
-        if self.dimension != rhs.dimension {
-            panic!("Error while adding two variables of different dimensions.");
-        }
+    pub fn sub(&mut self, x_id: usize, y_id: usize) -> Option<usize> {
+        let x = &self.nodes[x_id];
+        let y = &self.nodes[y_id];
 
-        let operation = Subtraction {
-            first_operand: self.nodes.clone(),
-            second_operand: rhs.nodes.clone(),
-            buffer: ArrayD::zeros(&self.dimension[..]),
-            grad: ArrayD::zeros(&self.dimension[..]),
+        if !x.tensor.shares_dim(&y.tensor) {
+            None
+        } else {
+            let var_id = self.next_id;
+
+            let var = Variable {
+                tensor: TensorView::from_dimension(&x.tensor.sizes),
+                id: self.next_id,
+                op: Operation::Subtraction(x_id, y_id),
+                forward_refs: vec![],
+                requires_grad: x.requires_grad || y.requires_grad,
+            };
+
+            self.next_id += 1;
+
+            self.nodes[x_id].forward_refs.push(var_id);
+            self.nodes[y_id].forward_refs.push(var_id);
+
+            self.nodes.push(var);
+
+            Some(var_id)
+        }
+    }
+
+    pub fn mm(&mut self, x_id: usize, y_id: usize) -> Option<usize> {
+        let x = &self.nodes[x_id];
+        let y = &self.nodes[y_id];
+
+        if !x.tensor.can_mm(&y.tensor) {
+            None
+        } else {
+            let var_id = self.next_id;
+
+            let var = Variable {
+                tensor: TensorView::from_dimension(&[x.tensor.sizes[0], y.tensor.sizes[1]]),
+                id: var_id,
+                op: Operation::MatMatMul(x_id, y_id),
+                forward_refs: vec![],
+                requires_grad: x.requires_grad || y.requires_grad,
+            };
+
+            self.next_id += 1;
+
+            self.nodes[x_id].forward_refs.push(var_id);
+            self.nodes[y_id].forward_refs.push(var_id);
+
+            self.nodes.push(var);
+
+            Some(var_id)
+        }
+    }
+
+    pub fn mv(&mut self, x_id: usize, y_id: usize) -> Option<usize> {
+        let x = &self.nodes[x_id];
+        let y = &self.nodes[y_id];
+
+        if !x.tensor.can_mv(&y.tensor) {
+            None
+        } else {
+            let var_id = self.next_id;
+
+            let var = Variable {
+                tensor: TensorView::from_dimension(&[x.tensor.sizes[0]]),
+                id: var_id,
+                op: Operation::MatVecMul(x_id, y_id),
+                forward_refs: vec![],
+                requires_grad: x.requires_grad || y.requires_grad,
+            };
+
+            self.next_id += 1;
+
+            self.nodes[x_id].forward_refs.push(var_id);
+            self.nodes[y_id].forward_refs.push(var_id);
+
+            self.nodes.push(var);
+
+            Some(var_id)
+        }
+    }
+
+    pub fn tanh(&mut self, x_id: usize) -> Option<usize> {
+        let x = &self.nodes[x_id];
+
+        let var_id = self.next_id;
+        let var = Variable {
+            tensor: TensorView::from_dimension(&x.tensor.sizes),
+            id: var_id,
+            op: Operation::Tanh(x_id),
+            forward_refs: vec![],
+            requires_grad: x.requires_grad,
         };
-        Variable {
-            nodes: Rc::from(operation),
-            dimension: self.dimension.clone(),
-            forward_cache: None,
-        }
+
+        self.next_id += 1;
+        self.nodes[x_id].forward_refs.push(var_id);
+        self.nodes.push(var);
+
+        Some(var_id)
     }
 
-    pub fn mm_mul<R>(&self, rhs: &Variable<R>) -> Variable<MatMatMul<T, R>> {
-        /* 
-        
-        TODO: Add logic here that detects dimension mismatch for matrix multiplication.
+    pub fn relu(&mut self, x_id: usize) -> Option<usize> {
+        let x = &self.nodes[x_id];
 
-        */
-
-        if !(self.dimension.len() == 2 && rhs.dimension.len() == 2 && self.dimension[1] == rhs.dimension[0]) {
-            panic!("Error with matrix multiplication dimensions.");
-        }
-
-        let res_dimension = vec![self.dimension[0], self.dimension[1]];
-
-        let operation = MatMatMul {
-            first_operand: self.nodes.clone(),
-            second_operand: rhs.nodes.clone(),
-            buffer: ArrayD::zeros(&res_dimension[..]),
-            grad: ArrayD::zeros(&res_dimension[..]),
+        let var_id = self.next_id;
+        let var = Variable {
+            tensor: TensorView::from_dimension(&x.tensor.sizes),
+            id: var_id,
+            op: Operation::ReLU(x_id),
+            forward_refs: vec![],
+            requires_grad: x.requires_grad,
         };
-        Variable {
-            nodes: Rc::from(operation),
-            dimension: res_dimension,
-            forward_cache: None,
-        }
+
+        self.next_id += 1;
+        self.nodes[x_id].forward_refs.push(var_id);
+        self.nodes.push(var);
+
+        Some(var_id)
     }
 
-    pub fn mv_mul<R>(&self, rhs: &Variable<R>) -> Variable<MatVecMul<T, R>> {
-        if !(self.dimension.len() == 2 && rhs.dimension.len() == 1 && self.dimension[1] == rhs.dimension[0]) {
-            panic!("Error with matrix vector multiplication dimensions.");
-        }
+    pub fn sigmoid(&mut self, x_id: usize) -> Option<usize> {
+        let x = &self.nodes[x_id];
 
-        let res_dimension = vec![self.dimension[0]];
-
-        let operation = MatVecMul {
-            matrix: self.nodes.clone(),
-            vector: rhs.nodes.clone(),
-            buffer: ArrayD::zeros(&res_dimension[..]),
-            grad: ArrayD::zeros(&res_dimension[..]),
+        let var_id = self.next_id;
+        let var = Variable {
+            tensor: TensorView::from_dimension(&x.tensor.sizes),
+            id: var_id,
+            op: Operation::Sigmoid(x_id),
+            forward_refs: vec![],
+            requires_grad: x.requires_grad,
         };
-        Variable {
-            nodes: Rc::from(operation),
-            dimension: res_dimension,
-            forward_cache: None,
-        }
+
+        self.next_id += 1;
+        self.nodes[x_id].forward_refs.push(var_id);
+        self.nodes.push(var);
+
+        Some(var_id)
     }
-
-    pub fn sigmoid(&self) -> Variable<Sigmoid<T>> {
-        Variable {
-            nodes: Rc::from( Sigmoid{
-                input: self.nodes.clone(),
-                buffer: ArrayD::zeros(&self.dimension[..]),
-                grad: ArrayD::zeros(&self.dimension[..]),
-            }),
-            dimension: self.dimension.clone(),
-            forward_cache: None,
-        }
-    }
-
-    pub fn tanh(&self) -> Variable<Tanh<T>> {
-        Variable {
-            nodes: Rc::from( Tanh{
-                input: self.nodes.clone(),
-                buffer: ArrayD::zeros(&self.dimension[..]),
-                grad: ArrayD::zeros(&self.dimension[..]),
-            }),
-            dimension: self.dimension.clone(),
-            forward_cache: None,
-        }
-    }
-
-    pub fn relu(&self) -> Variable<ReLU<T>> {
-        Variable {
-            nodes: Rc::from( ReLU{
-                input: self.nodes.clone(),
-                buffer: ArrayD::zeros(&self.dimension[..]),
-                grad: ArrayD::zeros(&self.dimension[..]),
-            }),
-            dimension: self.dimension.clone(),
-            forward_cache: None,
-        }
-    }
-}
-
-
-/* Intention here is to specify operations common to nodes */
-/* Examples: Checking to see if node requires_grad, serialization, etc.` */
-pub trait Node<X, Y, Z, W> {    // Note how we have 4 generic parameters. Each node supports up to 4 operands.
-
-}
-
-pub struct Leaf {
-    requires_grad: Option<ArrayD<f32>>,
-    buffer: ArrayD<f32>,
-}
-
-impl<X, Y, Z, W> Node<X, Y, Z, W> for Leaf {
-
-}
-
-pub struct Addition<X: ?Sized, Y: ?Sized> {
-    first_operand: Rc<X>,
-    second_operand: Rc<Y>,
-
-    buffer: ArrayD<f32>,
-    grad: ArrayD<f32>,
-}
-
-impl<X, Y, Z, W> Node<X, Y, Z, W> for Addition<X, Y> {
-
-}
-
-pub struct Subtraction<X: ?Sized, Y: ?Sized> {
-    first_operand: Rc<X>,
-    second_operand: Rc<Y>,
-
-    buffer: ArrayD<f32>,
-    grad: ArrayD<f32>,
-}
-
-impl<X, Y, Z, W> Node<X, Y, Z, W> for Subtraction<X, Y> {
-
-}
-
-pub struct MatMatMul<X: ?Sized, Y: ?Sized> {
-    first_operand: Rc<X>,
-    second_operand: Rc<Y>,
-
-    buffer: ArrayD<f32>,
-    grad: ArrayD<f32>,
-}
-
-impl<X, Y, Z, W> Node<X, Y, Z, W> for MatMatMul<X, Y> {
-
-}
-
-pub struct MatVecMul<X: ?Sized, Y: ?Sized> {
-    matrix: Rc<X>,
-    vector: Rc<Y>,
-
-    buffer: ArrayD<f32>,
-    grad: ArrayD<f32>,
-}
-
-impl<X, Y, Z, W> Node<X, Y, Z, W> for MatVecMul<X, Y> {
-
-}
-
-pub struct Sigmoid<X: ?Sized> {
-    input: Rc<X>,
-
-    buffer: ArrayD<f32>,
-    grad: ArrayD<f32>,
-}
-
-impl<X, Y, Z, W> Node<X, Y, Z, W> for Sigmoid<X> {
-
-}
-
-pub struct Tanh<X: ?Sized> {
-    input: Rc<X>,
-
-    buffer: ArrayD<f32>,
-    grad: ArrayD<f32>,
-}
-
-impl<X, Y, Z, W> Node<X, Y, Z, W> for Tanh<X> {
-
-}
-
-pub struct ReLU<X: ?Sized> {
-    input: Rc<X>,
-
-    buffer: ArrayD<f32>,
-    grad: ArrayD<f32>,
-}
-
-impl<X, Y, Z, W> Node<X, Y, Z, W> for ReLU<X> {
-
 }
