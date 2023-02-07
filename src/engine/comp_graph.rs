@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 /// SUPPORT FOR COMPUTATIONAL GRAPHS
 /// So far: Only have support for the graph structure itself
 /// Main idea: Dissociate the graph's structure from any computational structures.
@@ -69,6 +71,22 @@ impl Graph {
     }
 
     // pub fn backward() 
+    fn topsort_backward(&mut self, var_id: usize) {
+        let mut visited_nodes= BTreeSet::new();
+        let mut sorted_list = vec![];
+        
+        self.topsort_recursive(var_id, &mut visited_nodes, &mut sorted_list);
+
+        let var = &mut self.nodes[var_id];
+        var.backward_topo = Some(sorted_list);
+    }
+
+    fn topsort_recursive(&self, node_id: usize, visited_nodes: &mut BTreeSet<usize>, sorted_list: &mut Vec<usize>) {
+        visited_nodes.insert(node_id);
+
+        // TODO: FINISH
+        
+    }
 
     pub fn zeros(&mut self, dim: &[usize], requires_grad: bool) -> Option<usize> {
         let var_id = self.next_id;
