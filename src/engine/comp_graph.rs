@@ -4,6 +4,7 @@
 /// This is so we may have GPU support down the line, where we keep data in VRAM.
 
 use super::tensor::{TensorView, self};
+use super::graph_ops::Operation;
 
 use ndarray::{prelude::*, FoldWhile};
 
@@ -48,18 +49,6 @@ impl Variable {
     }
 }
 
-#[derive(Debug)]
-pub enum Operation {
-    Leaf,
-    Sigmoid(usize),
-    Tanh(usize),
-    ReLU(usize),
-    Addition(usize, usize),
-    Subtraction(usize, usize),
-    MatMatMul(usize, usize),
-    MatVecMul(usize, usize),
-}
-
 impl Graph {
     pub fn new() -> Self {
         Graph {
@@ -68,7 +57,12 @@ impl Graph {
         }
     }
 
-    // pub fn backward() 
+    /* Returns a topologically sorted list of node IDs from the perspective of the given node. */
+    pub fn topsort_backward(&self, node_id: usize) -> Vec<usize> {
+        todo!();
+    }
+
+    fn topsort_recursive(&self, node_id: usize, )
 
     pub fn zeros(&mut self, dim: &[usize], requires_grad: bool) -> Option<usize> {
         let var_id = self.next_id;
