@@ -1,9 +1,24 @@
 
+use std::{rc::Rc, fmt::Debug};
+use ndarray::{prelude::*, Data};
+
+#[derive(Debug)]
+pub enum Datatype {
+    F32,
+}
+
+impl Datatype {
+    
+}
+
 #[derive(Debug)]
 pub struct TensorView {
     pub(crate) sizes: Vec<usize>,
     pub(crate) strides: Vec<usize>,
     pub(crate) offset: usize,
+    pub(crate) dtype: Datatype,
+
+    pub(crate) storage_ref: Rc<VecStorage>,
 
     // storage: TensorStorage
 }
@@ -25,7 +40,7 @@ impl TensorView {
     }
 
     #[inline]
-    pub fn from_dimension(dim: &[usize]) -> Self {
+    pub fn zeros_from_dimension(dim: &[usize], dtype: Datatype) -> Self {
         let sizes = dim.to_vec();
         
         let mut strides = vec![0; dim.len()];
@@ -36,15 +51,29 @@ impl TensorView {
             acc *= value;
         }
 
-        TensorView { sizes, strides, offset: 0 }
+        // let storage = VecStorage {
+            
+        // }
+
+        TensorView { sizes, strides, offset: 0, dtype: Datatype::F32}
     }
 
     pub fn gen_from_same(&self) -> Self {
-        Self::from_dimension(&self.sizes)
-    }
+        Self::zeros_from_dimension(&self.sizes, self.dtype)
+    }bawja
 }
 
-pub(crate) struct TensorStorage {
-    sizes: Vec<usize>
+#[derive(Debug)]
+pub struct VecStorage{
+    sizes: Vec<usize>,
+    // buffer: Vec<T>,
+    dtype: Datatype,
+}
 
+impl VecStorage {
+    pub fn zeros(dim: &[usize], dtype: Datatype) -> Self {
+        let buf_size = dim.iter().fold(1, |acc, &x| acc * x);
+
+        VecStorage { sizes: dim.to_vec(), dtype }
+    }
 }

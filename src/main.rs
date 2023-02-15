@@ -17,5 +17,11 @@ fn main() {
     
     let out = comp_graph.mm(c_prime, f_prime).unwrap();
 
-    println!("{:#?}", comp_graph);
+    // println!("{:#?}", comp_graph);
+    println!("{:?}", comp_graph.topsort_backward(f_prime));
+
+    let m = 4;
+    // for items in comp_graph.nodes[out].op.iter() {
+    //     println!("{items}");
+    // }
 } 

@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 /// SUPPORT FOR COMPUTATIONAL GRAPHS
 /// So far: Only have support for the graph structure itself
 /// Main idea: Dissociate the graph's structure from any computational structures.
@@ -57,19 +59,44 @@ impl Graph {
         }
     }
 
-    /* Returns a topologically sorted list of node IDs from the perspective of the given node. */
-    pub fn topsort_backward(&self, node_id: usize) -> Vec<usize> {
-        todo!();
+    #[inline]
+    pub fn dtype_res(&self, op: Operation) {
+        
     }
 
-    fn topsort_recursive(&self, node_id: usize, )
+    // pub fn backward() 
+    pub fn topsort_backward(&self, var_id: usize) -> Vec<usize> {
+        let mut visited_nodes= BTreeSet::new();
+        let mut sorted_list = vec![];
+        
+        self.topsort_recursive(var_id, &mut visited_nodes, &mut sorted_list);
+
+        sorted_list
+    }
+
+    fn topsort_recursive(&self, node_id: usize, visited_nodes: &mut BTreeSet<usize>, sorted_list: &mut Vec<usize>) {
+        visited_nodes.insert(node_id);
+        let node = &self.nodes[node_id];
+
+        for operand_id in node.op.iter() {
+            if !visited_nodes.contains(&operand_id) {
+                self.topsort_recursive(operand_id, visited_nodes, sorted_list);
+            }
+        }
+        sorted_list.push(node_id);
+        
+    }
+
+    // pub fn from_fn(&mut self, dim: &[usize]) -> Option<usize> {
+
+    // }
 
     pub fn zeros(&mut self, dim: &[usize], requires_grad: bool) -> Option<usize> {
         let var_id = self.next_id;
         let var = Variable::new(
-            TensorView::from_dimension(dim),
+            TensorView::zeros_from_dimension(dim),
             var_id,
-            Operation::Leaf,
+            Operation::leaf(),
             requires_grad,
         );
         
@@ -89,9 +116,9 @@ impl Graph {
         } else {
             let var_id = self.next_id;
             let var = Variable::new(
-                TensorView::from_dimension(&x.tensor.sizes),
+                TensorView::zeros_from_dimension(&x.tensor.sizes),
                 self.next_id,
-                Operation::Addition(x_id, y_id),
+                Operation::add(x_id, y_id),
                 x.requires_grad() || y.requires_grad()
             );
 
@@ -115,9 +142,9 @@ impl Graph {
         } else {
             let var_id = self.next_id;
             let var = Variable::new(
-                TensorView::from_dimension(&x.tensor.sizes),
+                TensorView::zeros_from_dimension(&x.tensor.sizes),
                 self.next_id,
-                Operation::Subtraction(x_id, y_id),
+                Operation::sub(x_id, y_id),
                 x.requires_grad() || y.requires_grad()
             );
 
@@ -142,9 +169,9 @@ impl Graph {
             let var_id = self.next_id;
             let new_dim = [x.tensor.sizes[0], y.tensor.sizes[1]];
             let var = Variable::new(
-                TensorView::from_dimension(&new_dim),
+                TensorView::zeros_from_dimension(&new_dim),
                 var_id,
-                Operation::MatMatMul(x_id, y_id),
+                Operation::mm(x_id, y_id),
                 x.requires_grad() || y.requires_grad()
             );
 
@@ -169,9 +196,9 @@ impl Graph {
             let var_id = self.next_id;
             let new_dim = [x.tensor.sizes[0], y.tensor.sizes[1]];
             let var = Variable::new(
-                TensorView::from_dimension(&new_dim),
+                TensorView::zeros_from_dimension(&new_dim),
                 var_id,
-                Operation::MatVecMul(x_id, y_id),
+                Operation::mv(x_id, y_id),
                 x.requires_grad() || y.requires_grad()
             );
 
@@ -190,9 +217,9 @@ impl Graph {
         let x = &self.nodes[x_id];
         let var_id = self.next_id;
         let var = Variable::new(
-            TensorView::from_dimension(&x.tensor.sizes),
+            TensorView::zeros_from_dimension(&x.tensor.sizes),
             var_id,
-            Operation::Tanh(x_id),
+            Operation::tanh(x_id),
             x.requires_grad()
         );
 
@@ -207,9 +234,9 @@ impl Graph {
         let x = &self.nodes[x_id];
         let var_id = self.next_id;
         let var = Variable::new(
-            TensorView::from_dimension(&x.tensor.sizes),
+            TensorView::zeros_from_dimension(&x.tensor.sizes),
             var_id,
-            Operation::ReLU(x_id),
+            Operation::relu(x_id),
             x.requires_grad()
         );
 
@@ -224,9 +251,9 @@ impl Graph {
         let x = &self.nodes[x_id];
         let var_id = self.next_id;
         let var = Variable::new(
-            TensorView::from_dimension(&x.tensor.sizes),
+            TensorView::zeros_from_dimension(&x.tensor.sizes),
             var_id,
-            Operation::Sigmoid(x_id),
+            Operation::sigmoid(x_id),
             x.requires_grad()
         );
 
