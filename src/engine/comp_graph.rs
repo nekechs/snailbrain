@@ -1,5 +1,13 @@
 use std::collections::BTreeSet;
 
+use super::addition::Addition;
+use super::leaf::Leaf;
+use super::matmatmul::MatMatMul;
+use super::matvecmul::MatVecMul;
+use super::relu::ReLU;
+use super::sigmoid::Sigmoid;
+use super::subtraction::Subtraction;
+use super::tanh::Tanh;
 /// SUPPORT FOR COMPUTATIONAL GRAPHS
 /// So far: Only have support for the graph structure itself
 /// Main idea: Dissociate the graph's structure from any computational structures.
@@ -21,7 +29,7 @@ pub struct Variable {
     tensor: TensorView,
 
     id: usize,
-    op: Operation,
+    op: Box<dyn Operation>,
     forward_refs: Vec<usize>,
 
     grad: Option<TensorView>,
@@ -37,13 +45,14 @@ impl Variable {
         }
     }
 
-    fn new(tensor: TensorView, id: usize, op: Operation, requires_grad: bool) -> Self {
+    #[inline]
+    fn new(tensor: TensorView, id: usize, operation: Box<dyn Operation>, requires_grad: bool) -> Self {
         let grad = if requires_grad {Some(tensor.gen_from_same())} else {None};
 
         Variable {
             tensor: tensor,
             id,
-            op,
+            op: Box::from(operation),
             forward_refs: vec![],
             grad,
             backward_topo: None,
@@ -57,11 +66,6 @@ impl Graph {
             nodes: vec![],
             next_id: 0
         }
-    }
-
-    #[inline]
-    pub fn dtype_res(&self, op: Operation) {
-        
     }
 
     // pub fn backward() 
@@ -96,7 +100,7 @@ impl Graph {
         let var = Variable::new(
             TensorView::zeros_from_dimension(dim),
             var_id,
-            Operation::leaf(),
+            Box::from(Leaf::new()),
             requires_grad,
         );
         
@@ -118,7 +122,7 @@ impl Graph {
             let var = Variable::new(
                 TensorView::zeros_from_dimension(&x.tensor.sizes),
                 self.next_id,
-                Operation::add(x_id, y_id),
+                Box::from(Addition::new(x_id, y_id)),
                 x.requires_grad() || y.requires_grad()
             );
 
@@ -144,7 +148,7 @@ impl Graph {
             let var = Variable::new(
                 TensorView::zeros_from_dimension(&x.tensor.sizes),
                 self.next_id,
-                Operation::sub(x_id, y_id),
+                Box::from(Subtraction::new(x_id, y_id)),
                 x.requires_grad() || y.requires_grad()
             );
 
@@ -171,7 +175,7 @@ impl Graph {
             let var = Variable::new(
                 TensorView::zeros_from_dimension(&new_dim),
                 var_id,
-                Operation::mm(x_id, y_id),
+                Box::from(MatMatMul::new(x_id, y_id)),
                 x.requires_grad() || y.requires_grad()
             );
 
@@ -198,7 +202,7 @@ impl Graph {
             let var = Variable::new(
                 TensorView::zeros_from_dimension(&new_dim),
                 var_id,
-                Operation::mv(x_id, y_id),
+                Box::from(MatVecMul::new(x_id, y_id)),
                 x.requires_grad() || y.requires_grad()
             );
 
@@ -219,7 +223,7 @@ impl Graph {
         let var = Variable::new(
             TensorView::zeros_from_dimension(&x.tensor.sizes),
             var_id,
-            Operation::tanh(x_id),
+            Box::from(Tanh::new(x_id)),
             x.requires_grad()
         );
 
@@ -236,7 +240,7 @@ impl Graph {
         let var = Variable::new(
             TensorView::zeros_from_dimension(&x.tensor.sizes),
             var_id,
-            Operation::relu(x_id),
+            Box::from(ReLU::new(x_id)),
             x.requires_grad()
         );
 
@@ -253,7 +257,7 @@ impl Graph {
         let var = Variable::new(
             TensorView::zeros_from_dimension(&x.tensor.sizes),
             var_id,
-            Operation::sigmoid(x_id),
+            Box::from(Sigmoid::new(x_id)),
             x.requires_grad()
         );
 

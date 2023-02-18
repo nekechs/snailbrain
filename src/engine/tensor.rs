@@ -16,9 +16,9 @@ pub struct TensorView {
     pub(crate) sizes: Vec<usize>,
     pub(crate) strides: Vec<usize>,
     pub(crate) offset: usize,
-    pub(crate) dtype: Datatype,
+    // pub(crate) dtype: Datatype,
 
-    pub(crate) storage_ref: Rc<VecStorage>,
+    // pub(crate) storage_ref: Rc<VecStorage>,
 
     // storage: TensorStorage
 }
@@ -40,7 +40,7 @@ impl TensorView {
     }
 
     #[inline]
-    pub fn zeros_from_dimension(dim: &[usize], dtype: Datatype) -> Self {
+    pub fn zeros_from_dimension(dim: &[usize]) -> Self {
         let sizes = dim.to_vec();
         
         let mut strides = vec![0; dim.len()];
@@ -55,12 +55,12 @@ impl TensorView {
             
         // }
 
-        TensorView { sizes, strides, offset: 0, dtype: Datatype::F32}
+        TensorView { sizes, strides, offset: 0 }
     }
 
     pub fn gen_from_same(&self) -> Self {
-        Self::zeros_from_dimension(&self.sizes, self.dtype)
-    }bawja
+        Self::zeros_from_dimension(&self.sizes)
+    }
 }
 
 #[derive(Debug)]
