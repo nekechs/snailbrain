@@ -37,7 +37,7 @@ where
         if lhs_arr.dim() != rhs_arr.dim() {
             // Handle the case when the dimensions are incompatible --- whenever the dimensions
             // do not match.
-            
+            panic!("Dimension incompatibility for pointwise addition.");
         }
 
         // println!("arrs: {:?}, {:?}", lhs_arr, rhs_arr);

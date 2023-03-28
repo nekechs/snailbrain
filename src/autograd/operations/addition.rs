@@ -31,7 +31,23 @@ where
 }
 
 pub struct AdditionBackward<T, D> {
-    pub(crate) lhs_grad: Option<Rc<RefCell<Array<T, D>>>>,
-    pub(crate) rhs_grad: Option<Rc<RefCell<Array<T, D>>>>,
+    pub(crate) operands_grad: [Option<Rc<RefCell<Array<T, D>>>>; 2],
     pub(crate) output_grad: Rc<RefCell<Array<T, D>>>,
+}
+
+impl <T, D> BackwardOp for AdditionBackward<T, D>
+where
+    D: Dimension,
+    T: Clone
+{
+    fn backward(&self) {
+        /* All we need to do here is set the gradient of the children equal to the gradient of the output. */
+        let outgrad_ref = self.output_grad.borrow();
+        for oper in self.operands_grad.iter() {
+            if let Some(oper_rc) = oper {
+                let mut operand_ref = oper_rc.borrow_mut();
+                operand_ref.assign(&*outgrad_ref);
+            }
+        }
+    }
 }
