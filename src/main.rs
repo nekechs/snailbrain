@@ -1,4 +1,3 @@
-mod engine1;
 mod tens;
 mod autograd;
 
@@ -7,7 +6,6 @@ use std::{rc::Rc, cell::RefCell, borrow::Borrow};
 use ndarray::{prelude::*, array, Ix2, Ix1};
 
 use autograd::tape::Tape;
-use engine1::comp_graph::*;
 use tens::view::*;
 // use ndarray::prelude::*;
 

@@ -30,3 +30,8 @@ where
     }
 }
 
+pub struct AdditionBackward<T, D> {
+    pub(crate) lhs_grad: Option<Rc<RefCell<Array<T, D>>>>,
+    pub(crate) rhs_grad: Option<Rc<RefCell<Array<T, D>>>>,
+    pub(crate) output_grad: Rc<RefCell<Array<T, D>>>,
+}
