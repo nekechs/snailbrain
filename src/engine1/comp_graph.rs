@@ -27,6 +27,7 @@ pub struct Graph{
 #[derive(Debug)]
 pub struct Variable {
     tensor: TensorView,
+    // tensor2: ArrayBase<
 
     id: usize,
     op: Box<dyn Operation>,
@@ -68,7 +69,14 @@ impl Graph {
         }
     }
 
-    // pub fn backward() 
+    /* Given that the inputs have propagated forward to all the nodes, what is the gradient of this node's value WRT all other nodes? */
+    /* Updates the gradient field of every single node to reflect this. */
+    pub fn backward(&mut self, var_id: usize) {
+        // TODO: FINISH
+        unimplemented!();
+    }
+
+    /* Performs topological sort on a node and all of the nodes that stem from the child references */
     pub fn topsort_backward(&self, var_id: usize) -> Vec<usize> {
         let mut visited_nodes= BTreeSet::new();
         let mut sorted_list = vec![];
@@ -95,6 +103,7 @@ impl Graph {
 
     // }
 
+    /* Generates a node in the graph that essentially represents a variable that starts out @ zero. */
     pub fn zeros(&mut self, dim: &[usize], requires_grad: bool) -> Option<usize> {
         let var_id = self.next_id;
         let var = Variable::new(
@@ -110,6 +119,7 @@ impl Graph {
         Some(var_id)
     }
 
+    /* Represents the sum of two graph variables. Must have the same dimension. */
     pub fn add(&mut self, x_id: usize, y_id: usize) -> Option<usize> {
         let x = &self.nodes[x_id];
         let y = &self.nodes[y_id];
@@ -266,5 +276,25 @@ impl Graph {
         self.nodes.push(var);
 
         Some(var_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn ex_iterator() {
+        let mut comp_graph = Graph::new();
+        let a = comp_graph.zeros(&[2, 3], true).unwrap();
+        let b = comp_graph.zeros(&[2, 3], false).unwrap();
+
+        let c = comp_graph.add(a, b).unwrap();
+        let d = comp_graph.sub(a, b).unwrap();
+
+        let c_children: Vec<_> = comp_graph.nodes[c].op.iter().collect();
+        let d_children: Vec<_> = comp_graph.nodes[d].op.iter().collect();
+        assert_eq!(vec![0, 1], c_children);
+        assert_eq!(vec![0, 1], d_children);
+        // println!("{:?}", vector);
     }
 }

@@ -17,6 +17,6 @@ impl Addition {
 impl Operation for Addition {
     fn iter(&self) -> OperandIter<'_> {
         let operands = &self.prot_op.children;
-        OperandIter { operands, op_num: 2 }
+        OperandIter { operands, op_num: 0 }
     }
 }

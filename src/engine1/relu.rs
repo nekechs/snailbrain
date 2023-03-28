@@ -17,6 +17,6 @@ impl ReLU {
 impl Operation for ReLU {
     fn iter(&self) -> OperandIter<'_> {
         let operands = &self.prot_op.children;
-        OperandIter { operands, op_num: 1 }
+        OperandIter { operands, op_num: 0 }
     }
 }
