@@ -11,11 +11,17 @@ use tens::view::*;
 
 
 fn main() {
-    let graph = Tape::new();
-    let A = graph.from_elem(Ix2(3, 3), 5.);
-    let x = graph.from_elem(Ix1(3), 2.);
+    // let arr = array![1.0, 2.0, 3.0];
+    // let arr2 = arr.into_dimensionality::<Ix2>();
+    // println!("{arr}");
 
-    let y = A.mv(&x);
+    let graph = Tape::new();
+    let A = graph.from_elem_grad(Ix2(3, 4), 5.);
+    let x = graph.from_elem(Ix1(4), 2.);
+
+    let b = graph.from_elem(Ix1(3), -1.0);
+
+    let y = &A.mv(&x) + &b;
 
     graph.forward();
     

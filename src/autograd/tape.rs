@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use ndarray::prelude::*;
 use num_traits::Zero;
 
-use super::{operations::{BackwardOp, ForwardOp, leaf::LeafForward}, expr::Expression};
+use super::{operations::{BackwardOp, ForwardOp, leaf::{LeafForward, LeafBackward}}, expr::Expression};
 
 pub struct Node {
     pub(crate) fw: Box<dyn ForwardOp>,
@@ -43,7 +43,33 @@ impl Tape {
         Expression {
             tape: &self,
             index: self.insert(leaf_node),
-            output: arr_ref.clone()
+            output: arr_ref.clone(),
+            grad: None
+        }
+    }
+
+    pub fn from_elem_grad<'t, T, D>(&'t self, dim: D, val: T) -> Expression<'t, T, D>
+    where
+        T: Zero + Clone + 'static,
+        D: Dimension + 'static
+    {
+        let arr_ref = Rc::from(RefCell::new(Array::from_elem(dim.clone(), val)));
+        let grad_ref = Rc::from(RefCell::new(Array::zeros(dim)));
+
+        let leaf_node = Node {
+            fw: Box::from(LeafForward {
+                value: arr_ref.clone()
+            }),
+            bw: Some(Box::from(LeafBackward {
+                grad: grad_ref.clone()
+            }))
+        };
+
+        Expression {
+            tape: &self,
+            index: self.insert(leaf_node),
+            output: arr_ref.clone(),
+            grad: Some(grad_ref.clone())
         }
     }
 

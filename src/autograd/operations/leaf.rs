@@ -32,3 +32,13 @@ impl <T, D> ForwardOp for LeafForward<T, D> {
         // Nothing. We don't want anything here.
     }
 }
+
+pub struct LeafBackward<T, D> {
+    pub(crate) grad: Rc<RefCell<Array<T, D>>>
+}
+
+impl <T, D> BackwardOp for LeafBackward<T, D> {
+    fn backward(&self) {
+        // Again, no operation required.
+    }
+}

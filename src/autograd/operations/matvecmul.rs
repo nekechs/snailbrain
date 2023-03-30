@@ -1,5 +1,4 @@
 use std::ops::{Sub, Div};
-use std::process::Output;
 use std::{cell::RefCell, ops::Add};
 use std::rc::Rc;
 
@@ -44,5 +43,38 @@ where
         let matrix_ref = & * self.matrix.borrow();
         let vector_ref = & * self.vector.borrow();
         general_mat_vec_mul(T::one(), matrix_ref, vector_ref, T::zero(), output_ref);
+    }
+}
+
+pub struct MatVecMulBackward<T> {
+    pub(crate) matrix_out: Rc<RefCell<Array2<T>>>,
+    pub(crate) vector_out: Rc<RefCell<Array1<T>>>,
+    
+    pub(crate) output_grad: Rc<RefCell<Array1<T>>>,
+    pub(crate) matrix_grad: Option<Rc<RefCell<Array2<T>>>>,
+    pub(crate) vector_grad: Option<Rc<RefCell<Array1<T>>>>
+}
+
+impl <T> BackwardOp for MatVecMulBackward<T> 
+where
+    T: Zero + One + Copy + Sub<Output = T> + Div<Output = T> + 'static
+{
+    fn backward(&self) {
+        let outgrad_ref = &*self.output_grad.borrow();
+        if let Some(matrix_grad) = &self.matrix_grad {
+            let matgrad_ref = &mut * matrix_grad.borrow_mut();
+            let vecout_ref = &*self.vector_out.borrow();
+            let vecout_t = vecout_ref.view().into_dimensionality::<Ix2>().unwrap().t();
+            let outgrad_2d = outgrad_ref.view().into_dimensionality::<Ix2>().unwrap();
+
+            // matgrad_ref.assign((outgrad_ref).into_dimensionality::<Ix2>().unwrap().dot(&transposed_view));
+            matgrad_ref.assign(&outgrad_2d.dot(vecout_ref));
+        }
+
+        if let Some(vector_grad) = &self.vector_grad {
+            let vecgrad_ref = &mut *vector_grad.borrow_mut();
+            let matout_ref = & *self.matrix_out.borrow();
+            general_mat_vec_mul(T::one(), matout_ref, outgrad_ref, T::zero(), vecgrad_ref);
+        }
     }
 }
