@@ -129,6 +129,7 @@ where
 
         let (mat_rows, mat_cols) = mat_ref.dim();
         let vec_size = vec_ref.dim();
+        println!("{mat_rows}");
 
         if mat_cols != vec_size {
             // Matrix vector product is not valid, because dimensions are not valid for doing so.

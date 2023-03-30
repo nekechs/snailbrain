@@ -3,7 +3,7 @@ use std::{cell::RefCell, ops::Add};
 use std::rc::Rc;
 
 use num_traits::{Zero,One};
-use ndarray::linalg::{general_mat_vec_mul, Dot};
+use ndarray::linalg::{general_mat_vec_mul, Dot, general_mat_mul};
 use ndarray::{prelude::*, Zip, LinalgScalar};
 use super::{ForwardOp, BackwardOp};
 
@@ -66,13 +66,18 @@ where
             let vecout_ref = &*self.vector_out.borrow();
 
             let grad_len = outgrad_ref.dim();
+            let vecout_len = vecout_ref.dim();
 
-            let vecout_t = vecout_ref.view().broadcast((grad_len, grad_len)).unwrap().t();
+            let vecout_view = vecout_ref.view();
+            let vecout_2d = vecout_view.broadcast((1, vecout_len)).unwrap();
             let outgrad_1dview = outgrad_ref.view();
-            let outgrad_2d = outgrad_1dview.broadcast((grad_len, grad_len)).unwrap();
+            let outgrad_2d = outgrad_1dview.broadcast((1, grad_len)).unwrap();
+            let outgrad_t = outgrad_2d.t();
 
-            // matgrad_ref.assign((outgrad_ref).into_dimensionality::<Ix2>().unwrap().dot(&transposed_view));
-            matgrad_ref.assign(&outgrad_2d.dot(vecout_ref));
+            // matgrad_ref.assign((outgrad_ref).into_dimensionality:Ix2>().unwrap().dot(&transposed_view));
+            // matgrad_ref.assign(&vecout_ref.dot(&outgrad_2d));
+            general_mat_mul(T::one(), &outgrad_t, &vecout_2d, T::zero(), matgrad_ref);
+            // matgrad_ref.assign(&outgrad_2d.dot(vecout_ref));
         }
 
         if let Some(vector_grad) = &self.vector_grad {
