@@ -64,8 +64,12 @@ where
         if let Some(matrix_grad) = &self.matrix_grad {
             let matgrad_ref = &mut * matrix_grad.borrow_mut();
             let vecout_ref = &*self.vector_out.borrow();
-            let vecout_t = vecout_ref.view().into_dimensionality::<Ix2>().unwrap().t();
-            let outgrad_2d = outgrad_ref.view().into_dimensionality::<Ix2>().unwrap();
+
+            let grad_len = outgrad_ref.dim();
+
+            let vecout_t = vecout_ref.view().broadcast((grad_len, grad_len)).unwrap().t();
+            let outgrad_1dview = outgrad_ref.view();
+            let outgrad_2d = outgrad_1dview.broadcast((grad_len, grad_len)).unwrap();
 
             // matgrad_ref.assign((outgrad_ref).into_dimensionality::<Ix2>().unwrap().dot(&transposed_view));
             matgrad_ref.assign(&outgrad_2d.dot(vecout_ref));

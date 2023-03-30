@@ -11,27 +11,24 @@ use tens::view::*;
 
 
 fn main() {
-    // let arr = array![1.0, 2.0, 3.0];
-    // let arr2 = arr.into_dimensionality::<Ix2>();
-    // println!("{arr}");
+    let arr = Array::<f64, _>::zeros(Ix1(5));//array![1.0, 2.0, 3.0];
+    let arr2 = arr.broadcast(Ix2(1, 5));
+    println!("{:?}", arr2);
 
     let graph = Tape::new();
-    let A = graph.from_elem_grad(Ix2(3, 4), 5.);
-    let x = graph.from_elem(Ix1(4), 2.);
+    let A = graph.from_elem_grad(Ix2(1, 1), 5.);
+    let x = graph.from_elem(Ix1(1), 3.);
 
-    let b = graph.from_elem(Ix1(3), -1.0);
+    let b = graph.from_elem_grad(Ix1(1), -1.0);
 
     let y = &A.mv(&x) + &b;
+    // let y = &x + &b;
 
     graph.forward();
     
     println!("{}", y.output.borrow_mut());
 
-    {
-        x.output.borrow_mut().assign(&Array1::zeros(3));
-    }
+    y.backward(array![1.0]);
 
-    graph.forward();
-
-    println!("{}", y.output.borrow_mut());
+    println!("{}", A.grad.unwrap().borrow_mut());
 } 

@@ -1,8 +1,8 @@
 use std::fmt::Debug;
-use std::{ops::{Add, Sub, Div}, cell::RefCell, rc::Rc, borrow::BorrowMut};
+use std::{ops::{Add, Sub, Div}, cell::{RefCell, Ref}, rc::Rc};
 
 use ndarray::linalg::Dot;
-use ndarray::prelude::*;
+use ndarray::{prelude::*, RawData, Data};
 use num_traits::{Zero, One};
 use super::operations::BackwardOp;
 use super::operations::matvecmul::{MatVecMulForward, MatVecMulBackward};
@@ -24,10 +24,40 @@ pub struct Expression<'t, T, D> {
     pub(crate) grad: Option<Rc<RefCell<Array<T, D>>>>
 }
 
-impl <'t, T, D> Expression<'t, T, D> {
+impl <'t, T, D> Expression<'t, T, D>
+where
+    T: Clone
+{
     #[inline]
     pub fn grad_exists(&self) -> bool {
         self.grad.is_some()
+    }
+
+    pub fn backward<S>(&self, grad: ArrayBase<S, D>)
+    where
+        S: RawData<Elem = T> + Data,
+        D: Dimension
+    {
+        // if !self.grad_exists() {
+        //     panic!("Tried to run backward() on a non grad node.");
+        // }
+        // let mut out_grad = (&self.grad).unwrap().borrow_mut();
+        if let Some(grad_out) = &self.grad {
+            let nodes = self.tape.nodes.borrow();
+            if self.index != nodes.len() - 1 {
+                panic!("Called backward on a non final node");
+            }
+
+            {
+            let mut grad_out = grad_out.borrow_mut();
+            grad_out.assign(&grad);
+            }
+
+            for node in nodes.iter().rev() {
+                node.backward();
+            }
+            // for index in 
+        }
     }
 }
 
@@ -74,7 +104,8 @@ where
                 operands: [self.output.clone(), rhs.output.clone()],
                 output: sum_ref.clone()
             }),
-            bw
+            bw,
+            operands: vec![self.index, rhs.index]
         };
 
         new_node.forward();
@@ -131,7 +162,8 @@ where
                 vector: rhs.output.clone(),
                 output: output_ref.clone()
             }),
-            bw
+            bw,
+            operands: vec![self.index, rhs.index]
         };
 
         Expression {

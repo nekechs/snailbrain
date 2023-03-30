@@ -1,23 +1,30 @@
 
 use std::{cell::RefCell, rc::Rc};
-use ndarray::prelude::*;
+use ndarray::{prelude::*, RawData};
 use num_traits::Zero;
 
 use super::{operations::{BackwardOp, ForwardOp, leaf::{LeafForward, LeafBackward}}, expr::Expression};
 
 pub struct Node {
     pub(crate) fw: Box<dyn ForwardOp>,
-    pub(crate) bw: Option<Box<dyn BackwardOp>>
+    pub(crate) bw: Option<Box<dyn BackwardOp>>,
+    pub(crate) operands: Vec<usize>
 }
 
 impl Node {
     pub fn forward(&self) {
         self.fw.forward();
     }
+
+    pub fn backward(&self) {
+        if let Some(bw) = &self.bw {
+            bw.backward();
+        }
+    }
 }
 
 pub struct Tape {
-    nodes: RefCell<Vec<Node>>
+    pub(crate) nodes: RefCell<Vec<Node>>
 }
 
 impl Tape {
@@ -37,7 +44,8 @@ impl Tape {
             fw: Box::from(LeafForward {
                 value: arr_ref.clone()
             }),
-            bw: None
+            bw: None,
+            operands: vec![]
         };
 
         Expression {
@@ -62,7 +70,8 @@ impl Tape {
             }),
             bw: Some(Box::from(LeafBackward {
                 grad: grad_ref.clone()
-            }))
+            })),
+            operands: vec![]
         };
 
         Expression {
